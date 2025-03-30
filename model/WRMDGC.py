@@ -7,9 +7,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 torch.cuda.empty_cache()
-'''
-小波分解在信号处理中确实是一种强大的工具，因为它可以将信号分解为不同的频率分量，从而分离出周期性信号（低频分量）和突变信号（高频分量）。然而，直接依赖小波分解来区分周期性信号和突变信号也有一定的局限性。这就是为什么在你的代码中先使用差分法，然后用小波分解来补充的原因。
-'''
 import pywt
 
 #'db4', 'haar', 'coif1', 'sym4'
@@ -131,7 +128,7 @@ class DGCRM(nn.Module):
         # 初始化全局记忆
         global_memory = torch.zeros(batch_size, self.node_num, self.DGCRM_cells[0].hidden_dim).to(x.device)
 
-        ## 000000000000 weekly      weekly
+        #weekly weekly
         importance_scores0 = - torch.abs(x - weekly)  # Shape: [B, T, N, 1]
         importance_scores0 = importance_scores0.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
@@ -141,7 +138,7 @@ class DGCRM(nn.Module):
         weighted_input0 = x * importance_weights0  # Shape: [B, T, N, 1]
 
 
-        # 1111111111111   daily  daily
+        #daily  daily
         importance_scores1 = - torch.abs(x - daily)  # Shape: [B, T, N, 1]
         importance_scores1 = importance_scores1.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
@@ -150,7 +147,7 @@ class DGCRM(nn.Module):
         weighted_input1 = x * importance_weights1  # Shape: [B, T, N, 1]
 
 
-        # 2222222222222recent    recent   recent
+        #recent  recent
         importance_scores2 = - torch.abs(x - recent)  # Shape: [B, T, N, 1]
         importance_scores2 = importance_scores2.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         importance_weights2 = importance_scores2 / (
