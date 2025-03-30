@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from model.DCNN import DCNN
-torch.cuda.empty_cache()
 
 
 class GWCCell(nn.Module):  
