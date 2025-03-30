@@ -132,7 +132,7 @@ class DGCRM(nn.Module):
         global_memory = torch.zeros(batch_size, self.node_num, self.DGCRM_cells[0].hidden_dim).to(x.device)
 
         ## 000000000000 weekly      weekly
-        importance_scores0 = torch.abs(x - weekly)  # Shape: [B, T, N, 1]
+        importance_scores0 = - torch.abs(x - weekly)  # Shape: [B, T, N, 1]
         importance_scores0 = importance_scores0.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
         importance_weights0 = importance_scores0 / (
@@ -142,7 +142,7 @@ class DGCRM(nn.Module):
 
 
         # 1111111111111   daily  daily
-        importance_scores1 = torch.abs(x - daily)  # Shape: [B, T, N, 1]
+        importance_scores1 = - torch.abs(x - daily)  # Shape: [B, T, N, 1]
         importance_scores1 = importance_scores1.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
         importance_weights1 = importance_scores1 / (
@@ -151,7 +151,7 @@ class DGCRM(nn.Module):
 
 
         # 2222222222222recent    recent   recent
-        importance_scores2 = torch.abs(x - recent)  # Shape: [B, T, N, 1]
+        importance_scores2 = - torch.abs(x - recent)  # Shape: [B, T, N, 1]
         importance_scores2 = importance_scores2.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         importance_weights2 = importance_scores2 / (
                 importance_scores2.sum(dim=1, keepdim=True) + 1e-6)  # Shape: [B, T, 1, 1]
