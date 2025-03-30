@@ -4,7 +4,7 @@ from model.DCNN import DCNN
 torch.cuda.empty_cache()
 
 
-class GWCCell(nn.Module):  #这个模块只进行GRU内部的更新，所以需要修改的是AGCN里面的东西
+class GWCCell(nn.Module):  
     def __init__(self, node_num, dim_in, dim_out, diffusion_steps, embed_dim):
         super(GWCCell, self).__init__()
         self.node_num = node_num
