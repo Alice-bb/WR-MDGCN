@@ -99,11 +99,11 @@ class DGCRM(nn.Module):
         self.num_layers = num_layers
         self.embed_dim = embed_dim
         self.time_weight_generator = nn.Sequential(
-            nn.Linear(2 * dim_in, 40),
+            nn.Linear(2 * dim_in, 15),
             nn.ReLU(),
-            nn.Linear(40, 2),
+            nn.Linear(15, 3),
             nn.ReLU(),
-            nn.Linear(2, 1),
+            nn.Linear(3, 1),
             nn.Sigmoid()  # 输出的权重在 [0, 1] 之间
         )
         self.a = nn.Parameter(torch.FloatTensor([0.2]))  # Global memory weight
