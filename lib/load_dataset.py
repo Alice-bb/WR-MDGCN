@@ -20,6 +20,10 @@ def load_st_dataset(dataset):
         data_path = os.path.join('./data/PeMS08/PEMS08.npz')
         data = np.load(data_path)['data'][:, :, 0]  #onley the first dimension, traffic flow data
 
+    elif dataset == 'xian_taxi':
+        data_path = os.path.join('./data/xian_taxi/xian_taxi_400.npz')
+        data = np.load(data_path)['data'][:, :, 0]  # onley the first dimension, traffic flow data
+
     elif dataset == 'PEMSD7(L)':
         data_path = os.path.join('./data/PEMS07(L)/PEMS07L.npz')
         data = np.load(data_path)['data'][:, :, 0]  #onley the first dimension, traffic flow data
@@ -27,9 +31,11 @@ def load_st_dataset(dataset):
     elif dataset == 'PEMSD7(M)':
         data_path = os.path.join('./data/PEMS07(M)/V_228.csv')
         data = np.array(pd.read_csv(data_path,header=None))  #onley the first dimension, traffic flow data
-
     elif dataset == 'METR-LA':
         data_path = os.path.join('./data/METR-LA/metr-la.h5')
+        data = pd.read_hdf(data_path)
+    elif dataset == 'PEMS-BAY':
+        data_path = os.path.join('./data/PEMS-BAY/pems-bay.h5')
         data = pd.read_hdf(data_path)
     elif dataset == 'BJ':
         data_path = os.path.join('./data/BJ/BJ500.csv')
@@ -63,6 +69,10 @@ def load_st_speed(dataset):
     elif dataset == 'PEMSD7(M)':
         data_path = os.path.join('./data/PEMS07(M)/V_228.csv')
         speed = np.load(data_path)['data'][:, :, 2]
+    elif dataset == 'xian_taxi':
+        data_path = os.path.join('./data/xian_taxi/xian_taxi_400.npz')
+        speed = np.load(data_path)['data'][:, :, 1]
+
     else:
         raise ValueError
     if len(speed.shape) == 2:
