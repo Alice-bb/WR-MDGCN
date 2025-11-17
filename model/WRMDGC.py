@@ -7,6 +7,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 torch.cuda.empty_cache()
+'''
+小波分解在信号处理中确实是一种强大的工具，因为它可以将信号分解为不同的频率分量，从而分离出周期性信号（低频分量）和突变信号（高频分量）。然而，直接依赖小波分解来区分周期性信号和突变信号也有一定的局限性。这就是为什么在你的代码中先使用差分法，然后用小波分解来补充的原因。
+'''
 import pywt
 
 #'db4', 'haar', 'coif1', 'sym4'
@@ -68,7 +71,7 @@ class GWCRM(nn.Module):
         for _ in range(1, num_layers):
             self.GWCRM_cells.append(GWCCell(node_num, dim_out, dim_out, diffusion_steps, embed_dim))
 
-    def forward(self, x, init_state, node_embeddings,speed,occupy):
+    def forward(self, x, init_state, node_embeddings,time, day,speed,occupy):
         #shape of x: (B, T, N, D)
         #shape of init_state: (num_layers, B, N, hidden_dim)
         assert x.shape[2] == self.node_num and x.shape[3] == self.input_dim
@@ -80,7 +83,8 @@ class GWCRM(nn.Module):
             state = init_state[i]   #state=[batch,steps,nodes,input_dim]
             inner_states = []
             for t in range(seq_length):   #如果有两层GRU，则第二层的GGRU的输入是前一层的隐藏状态
-                state = self.GWCRM_cells[i](current_inputs[:, t, :, :], state, [node_embeddings[0][:, t, :, :], node_embeddings[1]],speed[:, t, :, :],occupy[:,t,:,:])#state=[batch,steps,nodes,input_dim]
+                state = self.GWCRM_cells[i](current_inputs[:, t, :, :], state, [node_embeddings[0][:, t, :, :],
+                            node_embeddings[1]],time[:, t, :, :], day[:, t, :, :],speed[:, t, :, :],occupy[:, t, :, :])#state=[batch,steps,nodes,input_dim]
                 # state = self.dcrnn_cells[i](current_inputs[:, t, :, :], state,[node_embeddings[0], node_embeddings[1]])
                 inner_states.append(state)   #一个list，里面是每一步的GRU的hidden状态
             output_hidden.append(state)  #每层最后一个GRU单元的hidden状态
@@ -105,14 +109,19 @@ class DGCRM(nn.Module):
 
         # 自适应时间步权重生成模块
         self.time_weight_generator = nn.Sequential(
-            nn.Linear(2 * dim_in, 40),
+            nn.Linear(2 * dim_in, 15),
             nn.ReLU(),
-            nn.Linear(40, 2),
+            nn.Linear(15, 3),
             nn.ReLU(),
-            nn.Linear(2, 1),
+            nn.Linear(3, 1),
             nn.Sigmoid()  # 输出的权重在 [0, 1] 之间
         )
-
+        # self.time_weight_generator = nn.Sequential(
+        #     nn.Linear(2 * dim_in, 15),
+        #     nn.ReLU(),  # 或 nn.ReLU(), nn.GELU()
+        #     nn.Linear(15, 1),
+        #     nn.Sigmoid()  # 仅最后一层 Sigmoid 约束到 [0,1]
+        # )
 
         self.a = nn.Parameter(torch.FloatTensor([0.2]))  # Global memory weight
         self.b = nn.Parameter(torch.FloatTensor([0.2]))  # Update weight
@@ -121,15 +130,15 @@ class DGCRM(nn.Module):
         for _ in range(1, num_layers):
             self.DGCRM_cells.append(DDGCRNCell(node_num, dim_out, dim_out, cheb_k, embed_dim))
 
-    def forward(self, x, init_state, node_embeddings, time, day, speed, occupy, weekly, daily, recent):
+    def forward(self, x, init_state, node_embeddings, time, day, speed, occupy,weekly, daily, recent):
         assert x.shape[2] == self.node_num and x.shape[3] == self.input_dim
         seq_length = x.shape[1]
         batch_size = x.shape[0]
         # 初始化全局记忆
         global_memory = torch.zeros(batch_size, self.node_num, self.DGCRM_cells[0].hidden_dim).to(x.device)
 
-        #weekly weekly
-        importance_scores0 = - torch.abs(x - weekly)  # Shape: [B, T, N, 1]
+        ## 000000000000 weekly      weekly
+        importance_scores0 = torch.abs(x - weekly)  # Shape: [B, T, N, 1]
         importance_scores0 = importance_scores0.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
         importance_weights0 = importance_scores0 / (
@@ -138,8 +147,8 @@ class DGCRM(nn.Module):
         weighted_input0 = x * importance_weights0  # Shape: [B, T, N, 1]
 
 
-        #daily  daily
-        importance_scores1 = - torch.abs(x - daily)  # Shape: [B, T, N, 1]
+        # 1111111111111   daily  daily
+        importance_scores1 = torch.abs(x - daily)  # Shape: [B, T, N, 1]
         importance_scores1 = importance_scores1.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         # Normalize importance scores to get attention weights
         importance_weights1 = importance_scores1 / (
@@ -147,8 +156,8 @@ class DGCRM(nn.Module):
         weighted_input1 = x * importance_weights1  # Shape: [B, T, N, 1]
 
 
-        #recent  recent
-        importance_scores2 = - torch.abs(x - recent)  # Shape: [B, T, N, 1]
+        # 2222222222222recent    recent   recent
+        importance_scores2 = torch.abs(x - recent)  # Shape: [B, T, N, 1]
         importance_scores2 = importance_scores2.mean(dim=2, keepdim=True)  # Reduce over node dimension [B, T, 1, 1]
         importance_weights2 = importance_scores2 / (
                 importance_scores2.sum(dim=1, keepdim=True) + 1e-6)  # Shape: [B, T, 1, 1]
@@ -167,7 +176,7 @@ class DGCRM(nn.Module):
             for t in range(seq_length):
                 state = self.DGCRM_cells[i](current_inputs[:, t, :, :], state,
                                             [node_embeddings[0][:, t, :, :], node_embeddings[1]],
-                                            speed[:, t, :, :], occupy[:, t, :, :],time[:, t, :, :],day[:, t, :, :])
+                                            time[:, t, :, :], day[:, t, :, :],speed[:, t, :, :], occupy[:, t, :, :])
                 # 生成时间步自适应权重
                 time_input = torch.cat([time[:, t, :, :], day[:, t, :, :]], dim=-1)  # 结合时间信息
                 time_weight = self.time_weight_generator(time_input)  # [B, N, 1]：每个时间步的权重
@@ -207,11 +216,11 @@ class WRMDGC(nn.Module):
         self.use_W = args.use_week
         self.diffusion_steps = args.diffusion_steps
         self.embed_dim = args.embed_dim
-        self.dropout1 = nn.Dropout(p=0.2)
-        self.dropout2 = nn.Dropout(p=0.2)
-        self.dropout3 = nn.Dropout(p=0.2)
-        self.dropout4 = nn.Dropout(p=0.2)
-        self.dropout5 = nn.Dropout(p=0.2)
+        self.dropout1 = nn.Dropout(p=0.25)
+        self.dropout2 = nn.Dropout(p=0.25)
+        self.dropout3 = nn.Dropout(p=0.25)
+        self.dropout4 = nn.Dropout(p=0.25)
+        self.dropout5 = nn.Dropout(p=0.25)
         self.fc = nn.Linear(self.hidden_dim, 1)
         self.default_graph = args.default_graph
 
@@ -233,6 +242,8 @@ class WRMDGC(nn.Module):
                               args.embed_dim, args.num_layers)
         self.encoder4 = GWCRM(args.num_nodes, args.input_dim, args.rnn_units, args.diffusion_steps,
                               args.embed_dim, args.num_layers)
+        self.encoder5 = GWCRM(args.num_nodes, args.input_dim, args.rnn_units, args.diffusion_steps,
+                              args.embed_dim, args.num_layers)
 
         # predictor
         self.end_conv1 = nn.Conv2d(1, args.horizon * self.output_dim, kernel_size=(1, self.hidden_dim), bias=True)
@@ -242,8 +253,9 @@ class WRMDGC(nn.Module):
         self.end_conv5 = nn.Conv2d(1, args.horizon * self.output_dim, kernel_size=(1, self.hidden_dim), bias=True)
         self.end_conv6 = nn.Conv2d(1, args.horizon * self.output_dim, kernel_size=(1, self.hidden_dim), bias=True)
         self.end_conv7 = nn.Conv2d(1, args.horizon * self.output_dim, kernel_size=(1, self.hidden_dim), bias=True)
+        self.end_conv8 = nn.Conv2d(1, args.horizon * self.output_dim, kernel_size=(1, self.hidden_dim), bias=True)
 
-    def forward(self, source, i=2):
+    def forward(self, source, i=2, epoch=None):
         # source: B, T_1, N, D 3
         # target: B, T_2, N, D
 
@@ -292,7 +304,7 @@ class WRMDGC(nn.Module):
 
         if i == 1:
             init_state1 = self.encoder1.init_hidden(source0.shape[0])  # [2,64,307,64] 前面是2是因为有两层GRU
-            output_p, _ = self.encoder1(source0, init_state1, node_embeddings,time_in_day,day_in_week,speed1,occupy1,weekly1,daily1,recent1)  # B, T, N, hidden
+            output_p, _ = self.encoder1(source0, init_state1, node_embeddings,time_in_day,day_in_week,speed1,weekly1,daily1,recent1)  # B, T, N, hidden
             # output_p, _ = self.encoder1(source0, init_state1, node_embeddings, is_peak)  # B, T, N, hidden
             output_p = self.dropout1(output_p[:, -1:, :, :])
 
@@ -300,7 +312,7 @@ class WRMDGC(nn.Module):
             output1 = self.end_conv1(output_p)  # B, T*C, N, 1
 
             init_state4 = self.encoder3.init_hidden(source00.shape[0])  # [2,64,307,64] 前面是2是因为有两层GRU
-            output_a, _ = self.encoder3(source00, init_state4, node_embeddings1,speed2,occupy2)  # B, T, N, hidden
+            output_a, _ = self.encoder3(source00, init_state4, node_embeddings1,speed2)  # B, T, N, hidden
             output_a = self.dropout4(output_a[:, -1:, :, :])
             # CNN based predictor
             output3 = self.end_conv5(output_a)  # B, T*C, N, 1
@@ -316,20 +328,28 @@ class WRMDGC(nn.Module):
             source1 = self.end_conv2(output)
             source2 = source0 - source1
             init_state2 = self.encoder2.init_hidden(source2.shape[0])  # [2,64,307,64] 前面是2是因为有两层GRU
-            output2, _ = self.encoder2(source2, init_state2, node_embeddings,time_in_day,day_in_week, speed1,occupy1, weekly1,daily1,recent1)  # B, T, N, hidden
+            output2, _ = self.encoder2(source2, init_state2, node_embeddings,time_in_day,day_in_week, speed1, occupy1,weekly1,daily1,recent1)  # B, T, N, hidden
             output2 = self.dropout2(output2[:, -1:, :, :])
             output2 = self.end_conv3(output2)
 
-            init_state4 = self.encoder3.init_hidden(source00.shape[0])  # [2,64,307,64] 前面是2是因为有两层GRU
-            output_a, _ = self.encoder3(source00, init_state4, node_embeddings1,speed2,occupy2)  # B, T, N, hidden
-            output_a = self.dropout4(output_a[:, -1:, :, :])
+            init_state3 = self.encoder3.init_hidden(source00.shape[0])  # [2,64,307,64] 前面是2是因为有两层GRU
+            output_a, _ = self.encoder3(source00, init_state3, node_embeddings1,time_in_day,day_in_week,speed2,occupy2)  # B, T, N, hidden
+            output_a = self.dropout3(output_a[:, -1:, :, :])
             # CNN based predictor
-            output3 = self.end_conv5(output_a)  # B, T*C, N, 1
-            source000 = self.end_conv6(output_a)
-            source3 = source00 - source000
-            init_state5 = self.encoder4.init_hidden(source3.shape[0])
-            output_a1, _ = self.encoder4(source3, init_state5, node_embeddings1,speed2,occupy2)
-            output_a1 = self.dropout5(output_a1[:, -1:, :, :])
-            output4 = self.end_conv7(output_a1)
+            output3 = self.end_conv4(output_a)  # B, T*C, N, 1
+            source3 = self.end_conv5(output_a)
+            source4 = source00 - source3
+            init_state4 = self.encoder4.init_hidden(source4.shape[0])
+            output_a1, _ = self.encoder4(source4, init_state4, node_embeddings1,time_in_day,day_in_week,speed2,occupy2)
+            output_a1 = self.dropout4(output_a1[:, -1:, :, :])
+            output4 = self.end_conv6(output_a1)
 
-            return output1  + output3 +output2 +output4
+            # source5 = self.end_conv7(output_a1)
+            # source6 = source4 - source5
+            # init_state5 = self.encoder5.init_hidden(source6.shape[0])
+            # output_a2, _ = self.encoder5(source6, init_state5, node_embeddings1, time_in_day, day_in_week, speed2,
+            #                              occupy2)
+            # output_a2 = self.dropout5(output_a2[:, -1:, :, :])
+            # output5 = self.end_conv8(output_a2)
+
+            return output1  + output2 + output3  +output4
