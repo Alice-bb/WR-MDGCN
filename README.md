@@ -27,6 +27,7 @@ WR-MDGCN is a novel spatiotemporal graph neural network designed to forecast tra
 - configs: training Configs and model configs for each dataset
 - lib: contains self-defined modules for our work, such as data loading, data pre-process, normalization, and evaluate metrics.
 - model: implementation of our model
+- pre-trained: the trained model files (.pth) for result verification and reproduction
 
 ---
 
