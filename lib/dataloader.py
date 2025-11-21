@@ -131,31 +131,37 @@ def get_dataloader(args, normalizer = 'std', tod=False, dow=False, weather=False
     past_day_avg_feature = np.zeros((L, N, F))
     recent_avg_feature = np.zeros((L, N, F))
 
+    if args.dataset in ['PEMSD8', 'xian_taxi']:
+        max_weeks_limit = 2
+        max_days_limit = 7
+        recent_steps_limit = 2
+    else:
+        max_weeks_limit = 2
+        max_days_limit = 9
+        recent_steps_limit = 12
+
     for i in range(data.shape[0]):
         # 1. 计算过去所有周相同时间片的流量平均值
         weekly_avgs = []
-        max_weeks = min(2, int(i / steps_per_week))  # 确保最多取 22 天
+        max_weeks = min(max_weeks_limit, int(i / steps_per_week))  # 确保最多取 22 天
         for week in range(1, max_weeks + 1):
-        #for week in range(1, int(i / steps_per_week) + 1):
             weekly_avgs.append(data[i - week * steps_per_week, :, 0])
         if weekly_avgs:
             past_week_avg_feature[i, :, 0] = sum(weekly_avgs) / len(weekly_avgs)
         else:
             past_week_avg_feature[i, :, 0] = 0  # 如果没有周数据则填充零
-
         # 2. 计算过去所有天相同时间片的流量平均值（最多十四天）
         daily_avgs = []
-        max_days = min(23, int(i / args.steps_per_day))  # 确保最多取 23 天
+        max_days = min(max_days_limit, int(i / args.steps_per_day))  # 确保最多取 23 天
         for day in range(1, max_days + 1):
             daily_avgs.append(data[i - day * args.steps_per_day, :, 0])
         if daily_avgs:
             past_day_avg_feature[i, :, 0] = sum(daily_avgs) / len(daily_avgs)
         else:
             past_day_avg_feature[i, :, 0] = 0  # 如果没有天数据则填充零
-
         # 3. 计算前三个时间片的流量平均值
         recent_avgs = []
-        for j in range(1, min(2, i + 1)):
+        for j in range(1, min(recent_steps_limit, i + 1)):
             recent_avgs.append(data[i - j, :, 0])
         if recent_avgs:
             recent_avg_feature[i, :, 0] = sum(recent_avgs) / len(recent_avgs)
