@@ -57,4 +57,37 @@ Selecting `train` will retrain the model and save the trained model parameters a
 With `test` selected, run.py will import the trained model parameters from `{DATASET_NAME}.pth` in the `pre-trained` folder. 
 
 ---
+## Tips for Dataset Compatibility
+
+Different datasets contain different feature types. Please **manually modify `get_dataloader()` in `dataloader.py`** and the corresponding model inputs in the following files according to the dataset you use:
+
+### Supported Features per Dataset
+
+| Dataset        | flow | speed | occupy |
+| -------------- | ---- | ----- | ------ |
+| **PEMSD3**     | ✔️    | ❌     | ❌      |
+| **PEMSD4**     | ✔️    | ✔️     | ✔️      |
+| **PEMSD7**     | ✔️    | ❌     | ❌      |
+| **PEMSD8**     | ✔️    | ✔️     | ✔️      |
+| **PEMS-BAY**   | ❌    | ✔️     | ❌      |
+| **Xi’an Taxi** | ✔️    | ✔️     | ❌      |
+
+###  Files to Update
+
+If you use a dataset that does **not contain certain features**, please comment out the corresponding parts in:
+
+- `dataloader.py`: `get_dataloader()`
+   e.g., comment out 
+
+  ```
+  speed = load_st_speed(...)
+  speed = np.array(speed)
+  feature_list.append(speed)
+  x_speed, y_speed =  Add_Window_Horizon(speed, args.lag, args.horizon, single)
+  ```
+
+   if dataset has no speed
+
+- `WRMDGC.py`, `DDGCRNCell.py`, `GWCCell.py`, `DCNN.py`, `DDGCN.py`
+   Make sure to  adjust the relevant function parameters in model files such as `WRMDGC.py`, `DDGCRNCell.py`, `GWCCell.py`, etc., to match the selected input features.
 
