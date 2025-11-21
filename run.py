@@ -111,7 +111,7 @@ args = args.parse_args()
 
 print(args)
 
-# init_seed(args.seed)
+init_seed(args.seed)
 if torch.cuda.is_available():
     torch.cuda.set_device(int(args.device[5]))
 else:
@@ -167,7 +167,7 @@ trainer = Trainer(model, loss, optimizer, train_loader, val_loader, test_loader,
 if args.mode == 'train':
     trainer.train()
 elif args.mode == 'test':
-    model.load_state_dict(torch.load('./experiments/PEMSD8/20241213122326/best_model.pth'), strict = False)
+    model.load_state_dict(torch.load('./pre-trained/PEMSD4.pth'), strict = False)
     # model.load_state_dict(torch.load('./pre-trained/PEMSD8.pth'))
     print("Load saved model")
     trainer.test(model, trainer.args, test_loader, scaler, trainer.logger)
